@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scan History</title>
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+
+<body>
+
+    <div class="container">
+        <h1>Scan History</h1>
+        <p class="description">Previous URL scans are shown below.</p>
+        <a href="/" class="history-button">← Back to Scanner</a>
+
+    
+    <div id="historyContainer">
+        <p>Loading history...</p>
+    </div>
+    </div>
+
+    <script> 
+        async function loadHistoey() {
+            const container = document.getElementById("historyContainer");
+            try {
+                const response = await fetch("/history");
+                const data = await response.json();
+
+                if (data.length === 0) {
+                    container.innerHTML = `
+                        <div class = "result-card">
+                            <h2>No scan history</h2>
+                            <p>No URLs have been scanned yet.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                let historyHTML = "";
+
+                data.forEach(item => { 
+                    let warningsHTML = "";
+                    if (item.warnings && item.warnings.length > 0) {
+                        warningsHTML = `
+                            <div class="warnings">
+                                <h3> ⚠️ Warnings</h3>
+                                <ul> ${item.warnings.map(warning => `<li> ${warning}</li>`).join("")}
+                                </ul>
+                            </div>
+                        `;
+                    }else{
+                        warningsHTML = `
+                            <div class="warnings">
+                                <h3>✓ No major warnings detected</h3>
+                            </div>
+                        `;
+                    }
+
+
+                    historyHTML += `
+                        <div classs = "result-card">
+                            <h2>${item.result}</h2>
+
+                            <div class="url-box">
+                                <strong>URL:</strong>
+                                <p>${item.url}</p>
+                            </div>
+
+                            <div class="risk-score">
+                                <strong>Risk Score:</strong>
+                                <span>${item.risk_score}/10</span>
+                            </div>
+
+                            <div class="risk-level">
+                                <strong>Risk Level:</strong>
+                                <span>${item.risk_level}</span>
+                            </div>
+
+                            ${warningsHTML}
+
+                            <p style="margin-top:15px;">
+                                <strong>Scan Time:</strong>
+                                ${item.scan_time}
+                            </p>
+                        </div>
+                    `;
+                    
+                });
+                container.innerHTML = historyHTML;
+            }catch (error) {
+                container.innerHTML = `
+                    <div class="result-card error-card">
+                        <h2> ❌ Eroor</h2>
+                        <p>Unable to load scan history.</p>
+                    </div>  
+                `;
+                console.error(error);
+            } 
+        }
+        loadHistoey();
+    </script>
+
+</body>
+</html>
