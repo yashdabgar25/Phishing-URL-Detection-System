@@ -54,6 +54,17 @@ checkButton.addEventListener("click", async function()
                 resultClass = "danger-card";
                 icon = "🔴";
             }
+
+            let checksHTML = `
+                <div class="warnings">
+                    <h3>🔎 Detection Details</h3>
+                    <ul>
+                        ${Object.entries(data.checks).map(([check, status]) => `
+                    <li><strong>${check}:</strong> ${status === "Passed" ? "✅ Passed" : "❌ Failed"}</li>
+                    `).join("")}
+                    </ul>
+                </div>
+            `;
             let warningsHTML = "";
 
             if (data.warnings.length > 0){
@@ -99,7 +110,7 @@ checkButton.addEventListener("click", async function()
                         </div>
 
                         ${warningsHTML}
-
+                        ${checksHTML}
                     </div>
                     `;
         }

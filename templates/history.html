@@ -3,104 +3,305 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Scan History</title>
 
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <title>Scan History - Phishing URL Detection System</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 
 <body>
 
-    <div class="container">
-        <h1>Scan History</h1>
-        <p class="description">Previous URL scans are shown below.</p>
-        <a href="/" class="history-button">← Back to Scanner</a>
+<div class="container">
 
-    
+    <h1>📋 Scan History</h1>
+
+    <p class="description">
+        View previously scanned URLs and their risk analysis.
+    </p>
+
+    <a href="/" class="history-button">
+        ← Back to URL Scanner
+    </a>
+
+    <button id="clearHistoryButton" class="clear-history-button">Clear History</button>
+
+    <div class="stats-container">
+
+    <div class="stat-card">
+        <h3>📊 Total Scans</h3>
+        <span id="totalScans">0</span>
+    </div>
+
+    <div class="stat-card safe-stat">
+        <h3>🟢 Safe</h3>
+        <span id="safeScans">0</span>
+    </div>
+
+    <div class="stat-card suspicious-stat">
+        <h3>🟡 Suspicious</h3>
+        <span id="suspiciousScans">0</span>
+    </div>
+
+    <div class="stat-card phishing-stat">
+        <h3>🔴 Phishing</h3>
+        <span id="phishingScans">0</span>
+    </div>
+
+</div>
+
     <div id="historyContainer">
-        <p>Loading history...</p>
+
+        <div class="result-card loading-card">
+            <h2>🔄 Loading History...</h2>
+            <p>Please wait.</p>
+        </div>
+
     </div>
-    </div>
 
-    <script> 
-        async function loadHistoey() {
-            const container = document.getElementById("historyContainer");
-            try {
-                const response = await fetch("/history");
-                const data = await response.json();
+</div>
 
-                if (data.length === 0) {
-                    container.innerHTML = `
-                        <div class = "result-card">
-                            <h2>No scan history</h2>
-                            <p>No URLs have been scanned yet.</p>
-                        </div>
-                    `;
-                    return;
-                }
+<script>
 
-                let historyHTML = "";
+async function loadHistory() {
 
-                data.forEach(item => { 
-                    let warningsHTML = "";
-                    if (item.warnings && item.warnings.length > 0) {
-                        warningsHTML = `
-                            <div class="warnings">
-                                <h3> ⚠️ Warnings</h3>
-                                <ul> ${item.warnings.map(warning => `<li> ${warning}</li>`).join("")}
-                                </ul>
-                            </div>
-                        `;
-                    }else{
-                        warningsHTML = `
-                            <div class="warnings">
-                                <h3>✓ No major warnings detected</h3>
-                            </div>
-                        `;
-                    }
+    const container = document.getElementById("historyContainer");
 
+    try {
 
-                    historyHTML += `
-                        <div classs = "result-card">
+        const response = await fetch("/history");
+        const data = await response.json();
+
+        let safeCount = 0;
+        let suspiciousCount = 0;
+        let phishingCount = 0;
+
+        data.forEach(item => {
+
+            if (item.result === "Likely Safe") {
+                safeCount++;
+            }
+            else if (item.result === "Suspicious") {
+                suspiciousCount++;
+            }
+            else if (item.result === "Potentially Phishing") {
+                phishingCount++;
+            }
+
+        });
+
+        document.getElementById("totalScans").textContent = data.length;
+        document.getElementById("safeScans").textContent = safeCount;
+        document.getElementById("suspiciousScans").textContent = suspiciousCount;
+        document.getElementById("phishingScans").textContent = phishingCount;
+
+        if (data.length === 0) {
+
+            container.innerHTML = `
+                <div class="result-card">
+                    <h2>📭 No Scan History</h2>
+                    <p>No URLs have been scanned yet.</p>
+                </div>
+            `;
+
+            return;
+        }
+
+        let historyHTML = "";
+
+        data.forEach(item => {
+
+            let resultClass = "safe-card";
+            let icon = "🟢";
+
+            if (item.result === "Suspicious") {
+                resultClass = "warning-card";
+                icon = "🟡";
+            }
+            else if (item.result === "Potentially Phishing") {
+                resultClass = "danger-card";
+                icon = "🔴";
+            }
+
+            let checksHTML = "";
+
+            if (item.checks && Object.keys(item.checks).length > 0) {
+                checksHTML = `
+                <div class="warnings">
+                    <h3>🔎 Detection Details</h3>
+                    <ul>
+                        ${Object.entries(item.checks).map(([check, status]) => `
+                        <li>
+                            <strong>${check}:</strong>
+                            ${status === "Passed" ? "✅ Passed" : "❌ Failed"}
+                        </li>
+                        `).join("")}
+                    </ul>
+                </div>
+            `;
+            }
+
+            let warningsHTML = "";
+
+            if (item.warnings && item.warnings.length > 0) {
+
+                warningsHTML = `
+                    <div class="warnings">
+
+                        <h3>⚠️ Warnings</h3>
+
+                        <ul>
+                            ${item.warnings
+                                .map(warning => `<li>${warning}</li>`)
+                                .join("")}
+                        </ul>
+
+                    </div>
+                `;
+
+            } else {
+
+                warningsHTML = `
+                    <div class="warnings">
+                        <h3>✓ No major warnings detected</h3>
+                    </div>
+                `;
+            }
+
+            historyHTML += `
+
+                <div class="result-card ${resultClass}">
+
+                    <div class="result-header">
+
+                        <span class="result-icon">
+                            ${icon}
+                        </span>
+
+                        <div>
+
                             <h2>${item.result}</h2>
 
-                            <div class="url-box">
-                                <strong>URL:</strong>
-                                <p>${item.url}</p>
-                            </div>
-
-                            <div class="risk-score">
-                                <strong>Risk Score:</strong>
-                                <span>${item.risk_score}/10</span>
-                            </div>
-
-                            <div class="risk-level">
-                                <strong>Risk Level:</strong>
-                                <span>${item.risk_level}</span>
-                            </div>
-
-                            ${warningsHTML}
-
-                            <p style="margin-top:15px;">
-                                <strong>Scan Time:</strong>
-                                ${item.scan_time}
+                            <p>
+                                URL analysis completed
                             </p>
+
                         </div>
-                    `;
-                    
-                });
-                container.innerHTML = historyHTML;
-            }catch (error) {
-                container.innerHTML = `
-                    <div class="result-card error-card">
-                        <h2> ❌ Eroor</h2>
-                        <p>Unable to load scan history.</p>
-                    </div>  
-                `;
-                console.error(error);
-            } 
+
+                    </div>
+
+                    <div class="url-box">
+
+                        <strong>Scanned URL:</strong>
+
+                        <p>
+                            ${item.url}
+                        </p>
+
+                    </div>
+
+                    <div class="risk-score">
+
+                        <strong>Risk Score:</strong>
+
+                        <span>
+                            ${item.risk_score}/10
+                        </span>
+
+                    </div>
+
+                    <div class="risk-level">
+
+                        <strong>Risk Level:</strong>
+
+                        <span>
+                            ${item.risk_level}
+                        </span>
+
+                    </div>
+
+                    ${warningsHTML}
+                    ${checksHTML}
+
+                    <p style="margin-top: 15px;">
+
+                        <strong>Scan Time:</strong>
+
+                        ${item.scan_time}
+
+                    </p>
+
+                </div>
+            `;
+        });
+
+        container.innerHTML = historyHTML;
+
+    }
+
+    catch (error) {
+
+        console.error(error);
+
+        container.innerHTML = `
+
+            <div class="result-card error-card">
+
+                <h2>❌ Unable to Load History</h2>
+
+                <p>
+                    Please make sure the Flask server is running.
+                </p>
+
+            </div>
+
+        `;
+    }
+}
+
+document.getElementById("clearHistoryButton").addEventListener("click", async function () {
+
+    const confirmClear = confirm(
+        "Are you sure you want to clear all scan history?"
+    );
+
+    if (!confirmClear) {
+        return;
+    }
+
+    try {
+
+        const response = await fetch("/clear-history", {
+            method: "POST"
+        });
+
+        const data = await response.json();
+
+        if (data.status === "success") {
+
+            alert("History cleared successfully.");
+
+            loadHistory();
+
+        } else {
+
+            alert("Unable to clear history.");
+
         }
-        loadHistoey();
-    </script>
+
+    } catch (error) {
+
+        console.error(error);
+
+        alert("Something went wrong.");
+
+    }
+
+});
+
+loadHistory();
+
+</script>
 
 </body>
 </html>
