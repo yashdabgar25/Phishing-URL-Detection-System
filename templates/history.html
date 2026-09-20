@@ -50,6 +50,21 @@
 
 </div>
 
+    <div class="history-filter">
+    <input
+        type="text"
+        id="searchInput"
+        placeholder="🔎 Search scanned URL..."
+    >
+
+    <select id="filterResult">
+        <option value="All">All Results</option>
+        <option value="Likely Safe">Likely Safe</option>
+        <option value="Suspicious">Suspicious</option>
+        <option value="Potentially Phishing">Potentially Phishing</option>
+    </select>
+    </div>
+
     <div id="historyContainer">
 
         <div class="result-card loading-card">
@@ -63,6 +78,7 @@
 
 <script>
 
+let allHistoryData=[];
 async function loadHistory() {
 
     const container = document.getElementById("historyContainer");
@@ -71,6 +87,7 @@ async function loadHistory() {
 
         const response = await fetch("/history");
         const data = await response.json();
+        allHistoryData = data;
 
         let safeCount = 0;
         let suspiciousCount = 0;
@@ -170,7 +187,7 @@ async function loadHistory() {
 
             historyHTML += `
 
-                <div class="result-card ${resultClass}">
+                <div class="result-card history-card ${resultClass}">
 
                     <div class="result-header">
 
@@ -223,13 +240,10 @@ async function loadHistory() {
                     ${warningsHTML}
                     ${checksHTML}
 
-                    <p style="margin-top: 15px;">
-
-                        <strong>Scan Time:</strong>
-
-                        ${item.scan_time}
-
-                    </p>
+                    <div class="scan-time">
+                        <strong>🕒 Scan Time:</strong>
+                            ${item.scan_time}
+                    </div>
 
                 </div>
             `;
@@ -257,6 +271,112 @@ async function loadHistory() {
 
         `;
     }
+}
+
+function displayHistory(data) {
+    const container = document.getElementById("historyContainer");
+
+    if (data.length === 0) {
+        container.innerHTML = `
+            <div class="result-card">
+                <h2>📭 No Matching History</h2>
+                <p>No scan records match your search or filter.</p>
+            </div>
+        `;
+        return;
+    }
+
+    let historyHTML = "";
+
+    data.forEach(item => {
+        let resultClass = "safe-card";
+        let icon = "🟢";
+
+        if (item.result === "Suspicious") {
+            resultClass = "warning-card";
+            icon = "🟡";
+        } else if (item.result === "Potentially Phishing") {
+            resultClass = "danger-card";
+            icon = "🔴";
+        }
+
+        let checksHTML = "";
+
+        if (item.checks && Object.keys(item.checks).length > 0) {
+            checksHTML = `
+                <div class="warnings">
+                    <h3>🔎 Detection Details</h3>
+                    <ul>
+                        ${Object.entries(item.checks).map(([check, status]) => `
+                            <li>
+                                <strong>${check}:</strong>
+                                ${status === "Passed" ? "✅ Passed" : "❌ Failed"}
+                            </li>
+                        `).join("")}
+                    </ul>
+                </div>
+            `;
+        }
+
+        let warningsHTML = "";
+
+        if (item.warnings && item.warnings.length > 0) {
+            warningsHTML = `
+                <div class="warnings">
+                    <h3>⚠️ Warnings</h3>
+                    <ul>
+                        ${item.warnings.map(warning => `<li>${warning}</li>`).join("")}
+                    </ul>
+                </div>
+            `;
+        } else {
+            warningsHTML = `
+                <div class="warnings">
+                    <h3>✓ No major warnings detected</h3>
+                </div>
+            `;
+        }
+
+        historyHTML += `
+            <div class="result-card history-card ${resultClass}">
+
+                <div class="result-header">
+                    <span class="result-icon">${icon}</span>
+
+                    <div>
+                        <h2>${item.result}</h2>
+                        <p>URL analysis completed</p>
+                    </div>
+                </div>
+
+                <div class="url-box">
+                    <strong>Scanned URL:</strong>
+                    <p>${item.url}</p>
+                </div>
+
+                <div class="risk-score">
+                    <strong>Risk Score:</strong>
+                    <span>${item.risk_score}/10</span>
+                </div>
+
+                <div class="risk-level">
+                    <strong>Risk Level:</strong>
+                    <span>${item.risk_level}</span>
+                </div>
+
+                ${warningsHTML}
+                ${checksHTML}
+
+                <div class="scan-time">
+                    <strong>🕒 Scan Time:</strong>
+                    ${item.scan_time}
+                </div>
+
+            </div>
+        `;
+    });
+
+    container.innerHTML = historyHTML;
 }
 
 document.getElementById("clearHistoryButton").addEventListener("click", async function () {
@@ -298,6 +418,29 @@ document.getElementById("clearHistoryButton").addEventListener("click", async fu
     }
 
 });
+
+document.getElementById("searchInput").addEventListener("input", function () {
+    console.log("SEARCH WORKING");
+    applyFilters();
+});
+document.getElementById("filterResult").addEventListener("change", applyFilters);
+
+function applyFilters() {
+    const searchText = document.getElementById("searchInput").value.toLowerCase();
+    const selectedResult = document.getElementById("filterResult").value;
+
+    const filteredData = allHistoryData.filter(item => {
+        const matchesSearch = item.url.toLowerCase().includes(searchText);
+
+        const matchesResult =
+            selectedResult === "All" ||
+            item.result === selectedResult;
+
+        return matchesSearch && matchesResult;
+    });
+
+    displayHistory(filteredData);
+}
 
 loadHistory();
 

@@ -312,3 +312,39 @@ button:hover {
 .clear-history-button:hover {
     background: #b91c1c;
 }
+
+.history-card {
+    margin-bottom: 20px;
+}
+
+.history-card .result-header {
+    margin-bottom: 5px;
+}
+
+.scan-time {
+    margin-top: 15px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.stat-card {
+    transition: 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+}
+
+.stat-card span {
+    display: block;
+    margin-top: 5px;
+}
+
+@media (max-width: 500px) {
+    .stats-container {
+        grid-template-columns: 1fr;
+    }
+}
