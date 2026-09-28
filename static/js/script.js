@@ -59,9 +59,36 @@ checkButton.addEventListener("click", async function()
                 <div class="warnings">
                     <h3>🔎 Detection Details</h3>
                     <ul>
-                        ${Object.entries(data.checks).map(([check, status]) => `
-                    <li><strong>${check}:</strong> ${status === "Passed" ? "✅ Passed" : "❌ Failed"}</li>
-                    `).join("")}
+                        ${Object.entries(data.checks).map(([check, status]) => {
+
+                            let icon = "ℹ️";
+
+                            if (
+                                status === "Enabled" ||
+                                status === "Domain Based" ||
+                                status === "Not Detected" ||
+                                status === "No Major Phishing Pattern Detected"
+                            ) {
+                                icon = "✅";
+                            }
+
+                            if (
+                                status === "High Risk Pattern Detected" ||
+                                status === "IP Based URL" ||
+                                status === "Detected" ||
+                                status === "Not Enabled"
+                            ) {
+                                icon = "⚠️";
+                            }
+
+                            return `
+                                <li>
+                                    <strong>${check}:</strong>
+                                    ${icon} ${status}
+                                </li>
+                            `;
+
+                        }).join("")}
                     </ul>
                 </div>
             `;
@@ -107,6 +134,24 @@ checkButton.addEventListener("click", async function()
                         <div class = "risk_level">
                             <strong>Risk Level:</strong>
                             <span>${data.risk_level}</span>
+                        </div>
+
+                        <div class="warnings">
+                            <h3>🛡️ VirusTotal Reputation</h3>
+                            ${
+                                data.virustotal && data.virustotal.status === "success"
+                                ? `
+                                    <ul>
+                                        <li>🔴 Malicious: ${data.virustotal.malicious}</li>
+                                        <li>🟡 Suspicious: ${data.virustotal.suspicious}</li>
+                                        <li>🟢 Harmless: ${data.virustotal.harmless}</li>
+                                        <li>⚪ Undetected: ${data.virustotal.undetected}</li>
+                                    </ul>
+                                `
+                                : `
+                                    <p>VirusTotal result is currently unavailable.</p>
+                                `
+                            }
                         </div>
 
                         ${warningsHTML}

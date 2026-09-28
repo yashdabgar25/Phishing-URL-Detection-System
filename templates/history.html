@@ -147,12 +147,36 @@ async function loadHistory() {
                 <div class="warnings">
                     <h3>🔎 Detection Details</h3>
                     <ul>
-                        ${Object.entries(item.checks).map(([check, status]) => `
-                        <li>
-                            <strong>${check}:</strong>
-                            ${status === "Passed" ? "✅ Passed" : "❌ Failed"}
-                        </li>
-                        `).join("")}
+                        ${Object.entries(item.checks).map(([check, status]) => {
+
+                            let icon = "ℹ️";
+
+                            if (
+                                status === "Enabled" ||
+                                status === "Domain Based" ||
+                                status === "Not Detected" ||
+                                status === "No Major Phishing Pattern Detected"
+                            ) {
+                                icon = "✅";
+                            }
+
+                            if (
+                                status === "High Risk Pattern Detected" ||
+                                status === "IP Based URL" ||
+                                status === "Detected" ||
+                                status === "Not Enabled"
+                            ) {
+                                icon = "⚠️";
+                            }
+
+                            return `
+                                <li>
+                                    <strong>${check}:</strong>
+                                    ${icon} ${status}
+                                </li>
+                            `;
+
+                        }).join("")}
                     </ul>
                 </div>
             `;
