@@ -80,293 +80,148 @@
 
 let allHistoryData=[];
 async function loadHistory() {
-
     const container = document.getElementById("historyContainer");
 
     try {
-
         const response = await fetch("/history");
-        const data = await response.json();
-        allHistoryData = data;
+        if (!response.ok) throw new Error("History loading failed");
+
+        allHistoryData = await response.json();
 
         let safeCount = 0;
         let suspiciousCount = 0;
         let phishingCount = 0;
 
-        data.forEach(item => {
+        allHistoryData.forEach(item => {
+            const result = String(item.result || "").trim().toLowerCase();
 
-            if (item.result === "Likely Safe") {
-                safeCount++;
-            }
-            else if (item.result === "Suspicious") {
-                suspiciousCount++;
-            }
-            else if (item.result === "Potentially Phishing") {
-                phishingCount++;
-            }
-
+            if (result === "likely safe") safeCount++;
+            else if (result === "suspicious") suspiciousCount++;
+            else if (result === "potential phishing" || result === "potentially phishing") phishingCount++;
         });
 
-        document.getElementById("totalScans").textContent = data.length;
+        document.getElementById("totalScans").textContent = allHistoryData.length;
         document.getElementById("safeScans").textContent = safeCount;
         document.getElementById("suspiciousScans").textContent = suspiciousCount;
         document.getElementById("phishingScans").textContent = phishingCount;
 
-        if (data.length === 0) {
+        displayHistory(allHistoryData);
 
-            container.innerHTML = `
-                <div class="result-card">
-                    <h2>📭 No Scan History</h2>
-                    <p>No URLs have been scanned yet.</p>
-                </div>
-            `;
-
-            return;
-        }
-
-        let historyHTML = "";
-
-        data.forEach(item => {
-
-            let resultClass = "safe-card";
-            let icon = "🟢";
-
-            if (item.result === "Suspicious") {
-                resultClass = "warning-card";
-                icon = "🟡";
-            }
-            else if (item.result === "Potentially Phishing") {
-                resultClass = "danger-card";
-                icon = "🔴";
-            }
-
-            let checksHTML = "";
-
-            if (item.checks && Object.keys(item.checks).length > 0) {
-                checksHTML = `
-                <div class="warnings">
-                    <h3>🔎 Detection Details</h3>
-                    <ul>
-                        ${Object.entries(item.checks).map(([check, status]) => {
-
-                            let icon = "ℹ️";
-
-                            if (
-                                status === "Enabled" ||
-                                status === "Domain Based" ||
-                                status === "Not Detected" ||
-                                status === "No Major Phishing Pattern Detected"
-                            ) {
-                                icon = "✅";
-                            }
-
-                            if (
-                                status === "High Risk Pattern Detected" ||
-                                status === "IP Based URL" ||
-                                status === "Detected" ||
-                                status === "Not Enabled"
-                            ) {
-                                icon = "⚠️";
-                            }
-
-                            return `
-                                <li>
-                                    <strong>${check}:</strong>
-                                    ${icon} ${status}
-                                </li>
-                            `;
-
-                        }).join("")}
-                    </ul>
-                </div>
-            `;
-            }
-
-            let warningsHTML = "";
-
-            if (item.warnings && item.warnings.length > 0) {
-
-                warningsHTML = `
-                    <div class="warnings">
-
-                        <h3>⚠️ Warnings</h3>
-
-                        <ul>
-                            ${item.warnings
-                                .map(warning => `<li>${warning}</li>`)
-                                .join("")}
-                        </ul>
-
-                    </div>
-                `;
-
-            } else {
-
-                warningsHTML = `
-                    <div class="warnings">
-                        <h3>✓ No major warnings detected</h3>
-                    </div>
-                `;
-            }
-
-            historyHTML += `
-
-                <div class="result-card history-card ${resultClass}">
-
-                    <div class="result-header">
-
-                        <span class="result-icon">
-                            ${icon}
-                        </span>
-
-                        <div>
-
-                            <h2>${item.result}</h2>
-
-                            <p>
-                                URL analysis completed
-                            </p>
-
-                        </div>
-
-                    </div>
-
-                    <div class="url-box">
-
-                        <strong>Scanned URL:</strong>
-
-                        <p>
-                            ${item.url}
-                        </p>
-
-                    </div>
-
-                    <div class="risk-score">
-
-                        <strong>Risk Score:</strong>
-
-                        <span>
-                            ${item.risk_score}/10
-                        </span>
-
-                    </div>
-
-                    <div class="risk-level">
-
-                        <strong>Risk Level:</strong>
-
-                        <span>
-                            ${item.risk_level}
-                        </span>
-
-                    </div>
-
-                    ${warningsHTML}
-                    ${checksHTML}
-
-                    <div class="scan-time">
-                        <strong>🕒 Scan Time:</strong>
-                            ${item.scan_time}
-                    </div>
-
-                </div>
-            `;
-        });
-
-        container.innerHTML = historyHTML;
-
-    }
-
-    catch (error) {
-
+    } catch (error) {
         console.error(error);
-
-        container.innerHTML = `
-
-            <div class="result-card error-card">
-
-                <h2>❌ Unable to Load History</h2>
-
-                <p>
-                    Please make sure the Flask server is running.
-                </p>
-
-            </div>
-
-        `;
+        container.innerHTML = "<p>Unable to load scan history.</p>";
     }
 }
 
 function displayHistory(data) {
     const container = document.getElementById("historyContainer");
 
-    if (data.length === 0) {
+    if (!data || data.length === 0) {
         container.innerHTML = `
             <div class="result-card">
                 <h2>📭 No Matching History</h2>
                 <p>No scan records match your search or filter.</p>
-            </div>
-        `;
+            </div>`;
         return;
     }
 
     let historyHTML = "";
 
     data.forEach(item => {
+        const result = String(item.result || "").trim().toLowerCase();
+
         let resultClass = "safe-card";
         let icon = "🟢";
 
-        if (item.result === "Suspicious") {
+        if (result === "suspicious") {
             resultClass = "warning-card";
             icon = "🟡";
-        } else if (item.result === "Potentially Phishing") {
+        } else if (
+            result === "potential phishing" ||
+            result === "potentially phishing"
+        ) {
             resultClass = "danger-card";
             icon = "🔴";
         }
 
         let checksHTML = "";
 
+        // VirusTotal Reputation Section
+        let virustotalHTML = "";
+
+        const vt = item.virustotal;
+
+        if (vt && vt.status === "success") {
+            virustotalHTML = `
+                <div class="warnings">
+                    <h3>🛡️ VirusTotal Reputation</h3>
+                    <ul>
+                        <li>🔴 Malicious: ${vt.malicious ?? 0}</li>
+                        <li>🟡 Suspicious: ${vt.suspicious ?? 0}</li>
+                        <li>🟢 Harmless: ${vt.harmless ?? 0}</li>
+                        <li>⚪ Undetected: ${vt.undetected ?? 0}</li>
+                    </ul>
+                </div>`;
+        } else {
+            virustotalHTML = `
+                <div class="warnings">
+                    <h3>🛡️ VirusTotal Reputation</h3>
+                    <p>${vt?.message || "VirusTotal result unavailable."}</p>
+                </div>`;
+        }
+
         if (item.checks && Object.keys(item.checks).length > 0) {
             checksHTML = `
                 <div class="warnings">
                     <h3>🔎 Detection Details</h3>
                     <ul>
-                        ${Object.entries(item.checks).map(([check, status]) => `
-                            <li>
-                                <strong>${check}:</strong>
-                                ${status === "Passed" ? "✅ Passed" : "❌ Failed"}
-                            </li>
-                        `).join("")}
+                        ${Object.entries(item.checks).map(([check, value]) => {
+                            const status = typeof value === "object" && value !== null
+                                ? value.status
+                                : value;
+
+                            const details = typeof value === "object" && value !== null
+                                ? value.details
+                                : "";
+
+                            let checkIcon = "ℹ️";
+
+                            if (["Passed", "Enabled", "Not Detected"].includes(status)) {
+                                checkIcon = "✅";
+                            } else if (
+                                ["Warning", "Unavailable", "Failed", "Not Enabled"].includes(status)
+                            ) {
+                                checkIcon = "⚠️";
+                            }
+
+                            return `
+                                <li>
+                                    <strong>${check}:</strong>
+                                    ${checkIcon} ${status || "Unknown"}
+                                    ${details ? `<br><small>${details}</small>` : ""}
+                                </li>`;
+                        }).join("")}
                     </ul>
-                </div>
-            `;
+                </div>`;
         }
 
-        let warningsHTML = "";
-
-        if (item.warnings && item.warnings.length > 0) {
-            warningsHTML = `
+        const warningsHTML = item.warnings && item.warnings.length > 0
+            ? `
                 <div class="warnings">
                     <h3>⚠️ Warnings</h3>
                     <ul>
                         ${item.warnings.map(warning => `<li>${warning}</li>`).join("")}
                     </ul>
-                </div>
-            `;
-        } else {
-            warningsHTML = `
+                </div>`
+            : `
                 <div class="warnings">
                     <h3>✓ No major warnings detected</h3>
-                </div>
-            `;
-        }
+                </div>`;
 
         historyHTML += `
             <div class="result-card history-card ${resultClass}">
-
                 <div class="result-header">
                     <span class="result-icon">${icon}</span>
-
                     <div>
                         <h2>${item.result}</h2>
                         <p>URL analysis completed</p>
@@ -389,15 +244,14 @@ function displayHistory(data) {
                 </div>
 
                 ${warningsHTML}
+                ${virustotalHTML}
                 ${checksHTML}
 
                 <div class="scan-time">
                     <strong>🕒 Scan Time:</strong>
                     ${item.scan_time}
                 </div>
-
-            </div>
-        `;
+            </div>`;
     });
 
     container.innerHTML = historyHTML;

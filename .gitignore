@@ -23,3 +23,8 @@ train_model.py
 train_no_digits.py
 train_tld.py
 train_unique.py
+venv_v6/
+Phishing_Project_Backup/
+V6/__pycache__/
+V6/*_features_v6*.csv
+V6/*backup*.py

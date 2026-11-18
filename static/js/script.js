@@ -59,24 +59,26 @@ checkButton.addEventListener("click", async function()
                 <div class="warnings">
                     <h3>🔎 Detection Details</h3>
                     <ul>
-                        ${Object.entries(data.checks).map(([check, status]) => {
+                        ${Object.entries(data.checks || {}).map(([check, value]) => {
+
+                            // Support both old string values and new V6 objects
+                            const status = typeof value === "object" && value !== null
+                                ? value.status
+                                : value;
+
+                            const details = typeof value === "object" && value !== null
+                                ? value.details
+                                : "";
 
                             let icon = "ℹ️";
 
-                            if (
-                                status === "Enabled" ||
-                                status === "Domain Based" ||
-                                status === "Not Detected" ||
-                                status === "No Major Phishing Pattern Detected"
-                            ) {
+                            if (status === "Passed" || status === "Enabled" || status === "Not Detected") {
                                 icon = "✅";
-                            }
-
-                            if (
-                                status === "High Risk Pattern Detected" ||
-                                status === "IP Based URL" ||
-                                status === "Detected" ||
-                                status === "Not Enabled"
+                            } else if (
+                                status === "Warning" ||
+                                status === "Unavailable" ||
+                                status === "Not Enabled" ||
+                                status === "Detected"
                             ) {
                                 icon = "⚠️";
                             }
@@ -84,7 +86,8 @@ checkButton.addEventListener("click", async function()
                             return `
                                 <li>
                                     <strong>${check}:</strong>
-                                    ${icon} ${status}
+                                    ${icon} ${status || "Unknown"}
+                                    ${details ? `<br><small>${details}</small>` : ""}
                                 </li>
                             `;
 
