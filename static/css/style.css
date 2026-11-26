@@ -847,3 +847,35 @@ button:disabled {
 .download-report-btn:visited {
     color: white;
 }
+
+/* V7 Risk Score Visual Meter */
+
+.risk-meter {
+    margin: 18px 0 25px;
+}
+
+.risk-meter-track {
+    width: 100%;
+    height: 18px;
+    background: #e5e7eb;
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.risk-meter-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #22c55e, #eab308, #f97316, #ef4444);
+    border-radius: 20px;
+    transition: width 0.8s ease;
+}
+
+.risk-meter-labels {
+    display: flex;
+    justify-content: space-between;
+    gap: 6px;
+    margin-top: 10px;
+    font-size: 11px;
+    color: #64748b;
+    flex-wrap: wrap;
+}
