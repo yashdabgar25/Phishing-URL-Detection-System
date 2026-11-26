@@ -9,6 +9,7 @@ import requests
 from dotenv import load_dotenv
 import os
 import time
+import numpy as np
 
 load_dotenv()
 VIRUSTOTAL_API_KEY= os.getenv("VIRUSTOTAL_API_KEY")
@@ -89,7 +90,12 @@ def check_virustotal(url):
 
 app = Flask(__name__)
 
-model = joblib.load("phishing_model.pkl")
+try:
+    model = joblib.load("phishing_model.pkl")
+except Exception as e:
+    print("Old ML model could not load:", e)
+    model = None
+# model = None
 
 def extract_ml_features(url):
     parsed = urlparse(url)
@@ -345,29 +351,34 @@ def check_url():
     # ML MODEL PREDICTION
     # --------------------------------------------------
 
+# --------------------------------------------------
+# Machine Learning Model Prediction
+# --------------------------------------------------
+
+
+
     ml_features = extract_ml_features(url)
 
+    # Convert features into a 2D array
+    ml_features = np.asarray(ml_features, dtype=float).reshape(1, -1)
+
+    # ML prediction
     prediction = model.predict(ml_features)[0]
-    virustotal_result = check_virustotal(url)
 
+    # Phishing probability (class 0)
     probabilities = model.predict_proba(ml_features)[0]
-
-    # Model classes:
-    # 0 = Phishing
-    # 1 = Legitimate
-
     phishing_probability = probabilities[
         list(model.classes_).index(0)
     ]
 
-    # Convert probability to 0-10 risk score
+    # Calculate ML risk score (0-10)
     risk_score = round(phishing_probability * 10)
 
     # --------------------------------------------------
-    # Result classification
+    # VirusTotal Analysis
     # --------------------------------------------------
 
-    # --------------------------------------------------
+    virustotal_result = check_virustotal(url)
 # --------------------------------------------------
 # Hybrid ML + VirusTotal Decision
 # --------------------------------------------------
@@ -378,44 +389,64 @@ def check_url():
         suspicious = virustotal_result.get("suspicious", 0)
         harmless = virustotal_result.get("harmless", 0)
 
-        # VirusTotal has confirmed malicious detections
-        if malicious > 0:
-            result = "Potentially Phishing"
-            risk_score = 10
+        # Calculate the initial ML risk score (0-10)
+        ml_risk_score = round(phishing_probability * 10)
 
-        # VirusTotal has suspicious detections
+        # Multiple malicious detections: stronger warning
+        if malicious >= 3:
+            result = "Potentially Phishing"
+            risk_score = max(8, ml_risk_score)
+
+        # Some malicious detections: flag conflicting evidence
+        elif malicious > 0:
+            if prediction == 0 and phishing_probability >= 0.70:
+                result = "Potentially Phishing"
+                risk_score = max(7, ml_risk_score)
+            else:
+                result = "Suspicious"
+                risk_score = max(4, ml_risk_score)
+
+        # Suspicious detections without malicious detections
         elif suspicious > 0:
             result = "Suspicious"
-            risk_score = 5
+            risk_score = max(4, ml_risk_score)
 
-        # VirusTotal has strong clean reputation
-        elif malicious == 0 and suspicious == 0 and harmless >= 10:
-            result = "Likely Safe"
-            risk_score = 1
-
-        # VirusTotal has limited reputation data
-        else:
-            if prediction == 0 and risk_score >= 7:
-                result = "Potentially Phishing"
-            elif prediction == 0:
+        # No malicious/suspicious detections and strong clean reputation
+        elif harmless >= 10:
+            if prediction == 0 and phishing_probability >= 0.70:
                 result = "Suspicious"
+                risk_score = 4
             else:
                 result = "Likely Safe"
+                risk_score = min(2, ml_risk_score)
+
+        # Limited VirusTotal reputation
+        else:
+            if prediction == 0 and phishing_probability >= 0.70:
+                result = "Potentially Phishing"
+                risk_score = max(7, ml_risk_score)
+            elif prediction == 0:
+                result = "Suspicious"
+                risk_score = max(4, ml_risk_score)
+            else:
+                result = "Suspicious"
+                risk_score = max(3, ml_risk_score)
 
     else:
-        # VirusTotal unavailable → use ML as a warning signal
-        if prediction == 0 and risk_score >= 7:
-            result = "Suspicious"
-            risk_score = 5
+        # VirusTotal unavailable: rely on ML as a warning signal
+        ml_risk_score = round(phishing_probability * 10)
+
+        if prediction == 0 and phishing_probability >= 0.70:
+            result = "Potentially Phishing"
+            risk_score = max(7, ml_risk_score)
 
         elif prediction == 0:
             result = "Suspicious"
-            risk_score = 4
+            risk_score = max(4, ml_risk_score)
 
         else:
             result = "Likely Safe"
-            risk_score = 1
-
+            risk_score = max(1, ml_risk_score)
 
     # --------------------------------------------------
     # Risk level
@@ -498,21 +529,30 @@ def check_url():
     checks = ml_checks
 
 
-    # ML model information
+# --------------------------------------------------
+# ML Model Information
+# --------------------------------------------------
+
     if (
         virustotal_result.get("status") == "success"
         and virustotal_result.get("malicious", 0) == 0
         and virustotal_result.get("suspicious", 0) == 0
         and virustotal_result.get("harmless", 0) >= 10
     ):
-        warnings.insert(
-            0,
-            "ML model flagged this URL, but VirusTotal found no malicious or suspicious detections."
-        )
+        # VirusTotal reports no malicious or suspicious detections.
+        # Show an ML warning only if the ML model predicts phishing.
+        if prediction == 0:
+            warnings.insert(
+                0,
+                f"ML model flagged this URL (phishing probability: "
+                f"{round(phishing_probability * 100, 2)}%), "
+                "but VirusTotal found no malicious or suspicious detections."
+            )
     else:
         warnings.insert(
             0,
-            f"ML model phishing signal: {round(phishing_probability * 100, 2)}%"
+            f"ML model phishing probability: "
+            f"{round(phishing_probability * 100, 2)}%"
         )
 
 
@@ -612,11 +652,143 @@ def history():
 @app.route("/test-virustotal")
 def test_virustotal():
 
-    test_url = "https://www.python.org/"
+    test_url = "https://openai.com/"
 
     result = check_virustotal(test_url)
 
     return jsonify(result)
+
+
+
+# --------------------------------------------------
+# V7 Phishing Detection Endpoint
+# --------------------------------------------------
+
+from V7.scan_engine import scan_url_v7
+
+@app.route("/check_url_v7", methods=["POST"])
+def check_url_v7_route():
+
+    data = request.get_json()
+    url = data.get("url", "").strip()
+
+    if not url:
+        return jsonify({
+            "status": "error",
+            "message": "Please enter a URL."
+        }), 400
+
+    parsed_url = urlparse(url)
+
+    if parsed_url.scheme not in ["http", "https"] or not parsed_url.netloc:
+        return jsonify({
+            "status": "error",
+            "message": "Please enter a valid website URL."
+        }), 400
+
+    try:
+        scan_result = scan_url_v7(url)
+
+        # Extract V7 risk details
+        risk_data = scan_result.get("risk_score", {})
+        score = risk_data.get("score", 0)
+        risk_level = risk_data.get("risk_level", "Unknown")
+        triggered = risk_data.get("triggered_indicators", [])
+
+        # Determine result label
+        if score >= 60:
+            result_label = "Potential Phishing"
+        elif score >= 40:
+            result_label = "Suspicious"
+        elif score >= 20:
+            result_label = "Moderate Risk"
+        else:
+            result_label = "Likely Safe"
+
+        # Convert triggered indicators to warnings
+        warnings_list = [
+            item.get("description", item.get("category", "Risk indicator"))
+            for item in triggered
+        ]
+
+        # Store detailed V7 scan information
+        checks_data = {
+            "scan_version": "V7",
+            "risk_indicators": scan_result.get("risk_indicators", {}),
+            "google_safe_browsing": scan_result.get("google_safe_browsing", {}),
+            "live_analysis": scan_result.get("live_analysis", {}),
+            "ml_prediction": scan_result.get("ml_prediction"),
+            "ml_probabilities": scan_result.get("ml_probabilities", []),
+            "features": scan_result.get("features", {})
+        }
+
+        # Save V7 scan to existing history database
+        conn = sqlite3.connect("phishing_history.db")
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO history
+            (url, result, risk_score, risk_level, warnings, checks, scan_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            url,
+            result_label,
+            score,
+            risk_level,
+            json.dumps(warnings_list),
+            json.dumps(checks_data),
+            datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        ))
+
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "status": "success",
+            "url": url,
+            "v7_result": scan_result
+        })
+
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": "V7 scan failed.",
+            "error": str(e)
+        }), 500
+
+@app.route("/download-report/<int:scan_id>")
+def download_report(scan_id):
+
+    conn = sqlite3.connect("phishing_history.db")
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM history WHERE id = ?", (scan_id,))
+    record = cursor.fetchone()
+
+    conn.close()
+
+    if not record:
+        return "Scan record not found", 404
+
+    record = dict(record)
+
+    try:
+        warnings = json.loads(record.get("warnings") or "[]")
+    except Exception:
+        warnings = []
+
+    try:
+        checks = json.loads(record.get("checks") or "{}")
+    except Exception:
+        checks = {}
+
+    return render_template(
+        "report.html",
+        record=record,
+        warnings=warnings,
+        checks=checks
+    )
 
 if __name__=="__main__":
     init_db()

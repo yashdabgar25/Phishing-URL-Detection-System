@@ -93,11 +93,21 @@ async function loadHistory() {
         let phishingCount = 0;
 
         allHistoryData.forEach(item => {
-            const result = String(item.result || "").trim().toLowerCase();
+            const result = String(item.risk_level || item.result || "").trim().toLowerCase();
 
-            if (result === "likely safe") safeCount++;
-            else if (result === "suspicious") suspiciousCount++;
-            else if (result === "potential phishing" || result === "potentially phishing") phishingCount++;
+            if (result.includes("low risk") || result === "likely safe") {
+                safeCount++;
+            } 
+            else if (result.includes("moderate") || result.includes("suspicious")) {
+                suspiciousCount++;
+            } 
+            else if (
+                result.includes("high risk") ||
+                result.includes("critical risk") ||
+                result.includes("phishing")
+            ) {
+                phishingCount++;
+            }
         });
 
         document.getElementById("totalScans").textContent = allHistoryData.length;
@@ -119,7 +129,7 @@ function displayHistory(data) {
     if (!data || data.length === 0) {
         container.innerHTML = `
             <div class="result-card">
-                <h2>📭 No Matching History</h2>
+                <h2>No Matching History</h2>
                 <p>No scan records match your search or filter.</p>
             </div>`;
         return;
@@ -128,89 +138,34 @@ function displayHistory(data) {
     let historyHTML = "";
 
     data.forEach(item => {
+        const checks = item.checks || {};
+        const isV7 = checks.scan_version === "V7";
         const result = String(item.result || "").trim().toLowerCase();
 
         let resultClass = "safe-card";
         let icon = "🟢";
 
-        if (result === "suspicious") {
+        if (["suspicious", "moderate risk"].includes(result)) {
             resultClass = "warning-card";
             icon = "🟡";
         } else if (
-            result === "potential phishing" ||
-            result === "potentially phishing"
+            ["potential phishing", "potentially phishing",
+             "high risk", "critical risk"].includes(result)
         ) {
             resultClass = "danger-card";
             icon = "🔴";
         }
 
-        let checksHTML = "";
+        const warnings = Array.isArray(item.warnings)
+            ? item.warnings
+            : [];
 
-        // VirusTotal Reputation Section
-        let virustotalHTML = "";
-
-        const vt = item.virustotal;
-
-        if (vt && vt.status === "success") {
-            virustotalHTML = `
-                <div class="warnings">
-                    <h3>🛡️ VirusTotal Reputation</h3>
-                    <ul>
-                        <li>🔴 Malicious: ${vt.malicious ?? 0}</li>
-                        <li>🟡 Suspicious: ${vt.suspicious ?? 0}</li>
-                        <li>🟢 Harmless: ${vt.harmless ?? 0}</li>
-                        <li>⚪ Undetected: ${vt.undetected ?? 0}</li>
-                    </ul>
-                </div>`;
-        } else {
-            virustotalHTML = `
-                <div class="warnings">
-                    <h3>🛡️ VirusTotal Reputation</h3>
-                    <p>${vt?.message || "VirusTotal result unavailable."}</p>
-                </div>`;
-        }
-
-        if (item.checks && Object.keys(item.checks).length > 0) {
-            checksHTML = `
-                <div class="warnings">
-                    <h3>🔎 Detection Details</h3>
-                    <ul>
-                        ${Object.entries(item.checks).map(([check, value]) => {
-                            const status = typeof value === "object" && value !== null
-                                ? value.status
-                                : value;
-
-                            const details = typeof value === "object" && value !== null
-                                ? value.details
-                                : "";
-
-                            let checkIcon = "ℹ️";
-
-                            if (["Passed", "Enabled", "Not Detected"].includes(status)) {
-                                checkIcon = "✅";
-                            } else if (
-                                ["Warning", "Unavailable", "Failed", "Not Enabled"].includes(status)
-                            ) {
-                                checkIcon = "⚠️";
-                            }
-
-                            return `
-                                <li>
-                                    <strong>${check}:</strong>
-                                    ${checkIcon} ${status || "Unknown"}
-                                    ${details ? `<br><small>${details}</small>` : ""}
-                                </li>`;
-                        }).join("")}
-                    </ul>
-                </div>`;
-        }
-
-        const warningsHTML = item.warnings && item.warnings.length > 0
+        const warningsHTML = warnings.length > 0
             ? `
                 <div class="warnings">
                     <h3>⚠️ Warnings</h3>
                     <ul>
-                        ${item.warnings.map(warning => `<li>${warning}</li>`).join("")}
+                        ${warnings.map(w => `<li>${escapeHTML(w)}</li>`).join("")}
                     </ul>
                 </div>`
             : `
@@ -218,43 +173,186 @@ function displayHistory(data) {
                     <h3>✓ No major warnings detected</h3>
                 </div>`;
 
+        let detailsHTML = "";
+
+        if (isV7) {
+            const indicators = checks.risk_indicators || {};
+            const google = checks.google_safe_browsing || {};
+            const live = checks.live_analysis || {};
+
+            const indicatorLabels = {
+                at_symbol: "@ Symbol in URL",
+                brand_impersonation: "Brand Impersonation",
+                deceptive_domain: "Deceptive Domain",
+                google_safe_browsing_malicious: "Google Threat Detection",
+                http_not_https: "HTTP Instead of HTTPS",
+                ip_address: "IP Address in URL",
+                long_url: "Unusually Long URL",
+                many_subdomains: "Excessive Subdomains",
+                suspicious_redirect_chain: "Suspicious Redirect Chain",
+                suspicious_redirect_parameter: "Suspicious Redirect Parameter",
+                tls_problem: "TLS Security Problem"
+            };
+
+            const indicatorHTML = Object.entries(indicatorLabels)
+                .map(([key, label]) => {
+                    const active = indicators[key] === true;
+                    return `
+                        <li>
+                            <strong>${escapeHTML(label)}:</strong>
+                            ${active ? "⚠️ Detected" : "✅ Not Detected"}
+                        </li>`;
+                }).join("");
+
+            const googleStatus = google.success === true
+                ? (google.threat_found === true
+                    ? "⚠️ Threat Detected"
+                    : "✅ No Threat Found")
+                : "⚠️ Unavailable";
+
+            const dns = live.dns || {};
+            const http = live.http || {};
+            const tls = live.tls || {};
+            const redirects = live.redirects || {};
+
+            const liveStatus = (obj) => {
+                if (!obj || typeof obj !== "object") return "Unknown";
+                if (obj.success === true) return "✅ Successful";
+                if (obj.success === false) return "⚠️ Failed / Unavailable";
+                return "Unknown";
+            };
+
+            const httpStatus = http.status_code ?? http.status ?? "Unavailable";
+
+            let probabilityHTML = "Unavailable";
+
+            if (Array.isArray(checks.ml_probabilities)) {
+                probabilityHTML = checks.ml_probabilities
+                    .map((p, i) => `Class ${i}: ${escapeHTML(String(p))}`)
+                    .join("<br>");
+            }
+
+            detailsHTML = `
+                <div class="warnings">
+                    <h3>🛡️ Security Overview</h3>
+                    <ul>
+                        <li><strong>Google Safe Browsing:</strong> ${escapeHTML(googleStatus)}</li>
+                        <li><strong>DNS Analysis:</strong> ${escapeHTML(liveStatus(dns))}</li>
+                        <li><strong>HTTP Analysis:</strong> ${escapeHTML(liveStatus(http))}</li>
+                        <li><strong>HTTP Status Code:</strong> ${escapeHTML(String(httpStatus))}</li>
+                        <li><strong>TLS Analysis:</strong> ${escapeHTML(liveStatus(tls))}</li>
+                        <li><strong>Redirect Analysis:</strong> ${escapeHTML(liveStatus(redirects))}</li>
+                        <li><strong>ML Prediction:</strong> ${escapeHTML(String(checks.ml_prediction ?? "Unavailable"))}</li>
+                    </ul>
+                </div>
+
+                <details class="v7-details">
+                    <summary>🔍 View Full V7 Security Report</summary>
+
+                    <div class="warnings">
+                        <h4>🚨 Risk Indicators</h4>
+                        <ul>${indicatorHTML}</ul>
+
+                        <h4>🌐 Google Safe Browsing</h4>
+                        <p>${escapeHTML(googleStatus)}</p>
+                        <p>${escapeHTML(google.message || "No additional information available.")}</p>
+
+                        <h4>🖥️ Live Website Analysis</h4>
+                        <ul>
+                            <li><strong>DNS:</strong> ${escapeHTML(liveStatus(dns))}</li>
+                            <li><strong>HTTP:</strong> ${escapeHTML(liveStatus(http))}</li>
+                            <li><strong>TLS:</strong> ${escapeHTML(liveStatus(tls))}</li>
+                            <li><strong>Redirects:</strong> ${escapeHTML(liveStatus(redirects))}</li>
+                        </ul>
+
+                        <h4>🤖 Machine Learning</h4>
+                        <p><strong>Prediction:</strong> ${escapeHTML(String(checks.ml_prediction ?? "Unavailable"))}</p>
+                        <p><strong>Probabilities:</strong><br>${probabilityHTML}</p>
+
+                        <h4>📊 URL Technical Features</h4>
+
+                        <div class="feature-summary">
+                            ${Object.entries(checks.features || {}).map(([key, value]) => `
+                                <div class="feature-item">
+                                    <strong>${escapeHTML(key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()))}:</strong>
+                                    <span>${escapeHTML(String(value))}</span>
+                                </div>
+                            `).join("")}
+                        </div>
+                    </div>
+                </details>`;
+        } else {
+            if (item.checks && Object.keys(item.checks).length > 0) {
+                detailsHTML = `
+                    <div class="warnings">
+                        <h3>🔎 Detection Details</h3>
+                        <ul>
+                            ${Object.entries(item.checks).map(([check, value]) => `
+                                <li>
+                                    <strong>${escapeHTML(check)}:</strong>
+                                    ${escapeHTML(typeof value === "object"
+                                        ? JSON.stringify(value)
+                                        : String(value))}
+                                </li>
+                            `).join("")}
+                        </ul>
+                    </div>`;
+            }
+        }
+
+        const scoreSuffix = isV7 ? "/100" : "/10";
+
         historyHTML += `
             <div class="result-card history-card ${resultClass}">
                 <div class="result-header">
                     <span class="result-icon">${icon}</span>
                     <div>
-                        <h2>${item.result}</h2>
-                        <p>URL analysis completed</p>
+                        <h2>${escapeHTML(item.result || "Unknown")}</h2>
+                        <p>${isV7 ? "V7 Security Analysis" : "Legacy Scan"}</p>
                     </div>
                 </div>
 
                 <div class="url-box">
                     <strong>Scanned URL:</strong>
-                    <p>${item.url}</p>
+                    <p>${escapeHTML(item.url || "")}</p>
                 </div>
 
                 <div class="risk-score">
                     <strong>Risk Score:</strong>
-                    <span>${item.risk_score}/10</span>
+                    <span>${item.risk_score}${scoreSuffix}</span>
                 </div>
 
                 <div class="risk-level">
                     <strong>Risk Level:</strong>
-                    <span>${item.risk_level}</span>
+                    <span>${escapeHTML(item.risk_level || "Unknown")}</span>
                 </div>
 
                 ${warningsHTML}
-                ${virustotalHTML}
-                ${checksHTML}
+                ${detailsHTML}
+
+                <div class="report-download">
+                    <a href="/download-report/${item.id}" target="_blank" class="download-report-btn">
+                        📄 Download Scan Report
+                    </a>
+                </div>
 
                 <div class="scan-time">
                     <strong>🕒 Scan Time:</strong>
-                    ${item.scan_time}
+                    ${escapeHTML(item.scan_time || "")}
                 </div>
             </div>`;
     });
 
     container.innerHTML = historyHTML;
+}
+
+function escapeHTML(value) {
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 document.getElementById("clearHistoryButton").addEventListener("click", async function () {
@@ -310,9 +408,13 @@ function applyFilters() {
     const filteredData = allHistoryData.filter(item => {
         const matchesSearch = item.url.toLowerCase().includes(searchText);
 
+        const currentResult = String(item.risk_level || item.result || "").toLowerCase();
+
         const matchesResult =
             selectedResult === "All" ||
-            item.result === selectedResult;
+            (selectedResult === "Likely Safe" && (currentResult.includes("low risk") || currentResult === "likely safe")) ||
+            (selectedResult === "Suspicious" && (currentResult.includes("moderate") || currentResult.includes("suspicious"))) ||
+            (selectedResult === "Potentially Phishing" && (currentResult.includes("high risk") || currentResult.includes("critical risk") || currentResult.includes("phishing")));
 
         return matchesSearch && matchesResult;
     });

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>URL Guard - Security Report</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #f3f6fb;
+    color: #202938;
+    padding: 30px;
+    line-height: 1.5;
+}
+
+.report {
+    max-width: 900px;
+    margin: auto;
+    background: white;
+    padding: 35px;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+}
+
+h1 { color: #1d4ed8; }
+
+h2 {
+    color: #1d4ed8;
+    border-bottom: 2px solid #e5e7eb;
+    padding-bottom: 8px;
+    margin-top: 30px;
+}
+
+h3 {
+    margin-top: 20px;
+    color: #334155;
+}
+
+.item {
+    padding: 12px 15px;
+    background: #f7f9fc;
+    border-radius: 8px;
+    margin: 8px 0;
+    overflow-wrap: anywhere;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    background: white;
+}
+
+th, td {
+    text-align: left;
+    padding: 12px;
+    border: 1px solid #e5e7eb;
+    overflow-wrap: anywhere;
+}
+
+th {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+
+.section {
+    margin-top: 18px;
+}
+
+.good { color: #15803d; font-weight: bold; }
+.bad { color: #dc2626; font-weight: bold; }
+.neutral { color: #64748b; font-weight: bold; }
+
+button {
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 13px 22px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+.buttons {
+    text-align: center;
+    margin: 30px 0;
+}
+
+ul { padding-left: 22px; }
+
+li { margin: 8px 0; }
+
+@media print {
+    body { background: white; padding: 0; }
+    .report { box-shadow: none; border-radius: 0; }
+    .buttons { display: none; }
+    h2, h3 { break-after: avoid; }
+    table, .item { break-inside: avoid; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="report">
+
+<h1>URL GUARD</h1>
+<p><strong>Phishing URL Detection – Security Report</strong></p>
+
+<h2>Scan Information</h2>
+
+<table>
+<tr><th>Scan ID</th><td>{{ record.id }}</td></tr>
+<tr><th>Scanned URL</th><td>{{ record.url }}</td></tr>
+<tr><th>Result</th><td>{{ record.result }}</td></tr>
+<tr><th>Risk Score</th><td>{{ record.risk_score }}/100</td></tr>
+<tr><th>Risk Level</th><td>{{ record.risk_level }}</td></tr>
+<tr><th>Scan Time</th><td>{{ record.scan_time }}</td></tr>
+</table>
+
+<h2>Security Warnings</h2>
+
+{% if warnings %}
+<ul>
+{% for warning in warnings %}
+<li>{{ warning }}</li>
+{% endfor %}
+</ul>
+{% else %}
+<div class="item good">No recorded warnings.</div>
+{% endif %}
+
+{% if checks.get('scan_version') == 'V7' %}
+
+<h2>V7 Security Analysis</h2>
+
+{% set indicators = checks.get('risk_indicators', {}) %}
+
+<h3>Risk Indicators</h3>
+
+<table>
+<tr><th>Security Check</th><th>Status</th></tr>
+
+{% for key, value in indicators.items() %}
+<tr>
+<td>{{ key.replace('_', ' ').title() }}</td>
+<td>
+{% if value == true %}
+<span class="bad">⚠ Detected</span>
+{% elif value == false %}
+<span class="good">✓ Not Detected</span>
+{% else %}
+{{ value }}
+{% endif %}
+</td>
+</tr>
+{% endfor %}
+</table>
+
+{% set google = checks.get('google_safe_browsing', {}) %}
+
+<h3>Google Safe Browsing</h3>
+
+<table>
+<tr><th>Property</th><th>Details</th></tr>
+{% for key, value in google.items() %}
+<tr>
+<td>{{ key.replace('_', ' ').title() }}</td>
+<td>
+{% if value is mapping or value is sequence and value is not string %}
+{{ value | join(', ') if value is sequence and value is not string else value | tojson }}
+{% else %}
+{{ value }}
+{% endif %}
+</td>
+</tr>
+{% endfor %}
+</table>
+
+{% set live = checks.get('live_analysis', {}) %}
+
+<h3>Live Website Analysis</h3>
+
+{% for section_name, section_data in live.items() %}
+
+<div class="section">
+<h3>{{ section_name.replace('_', ' ').title() }}</h3>
+
+{% if section_data is mapping %}
+
+<table>
+<tr><th>Property</th><th>Details</th></tr>
+
+{% for key, value in section_data.items() %}
+
+<tr>
+<td>{{ key.replace('_', ' ').title() }}</td>
+<td>
+
+{% if value is mapping %}
+<table>
+{% for subkey, subvalue in value.items() %}
+<tr>
+<td>{{ subkey.replace('_', ' ').title() }}</td>
+<td>
+{% if subvalue is mapping %}
+{{ subvalue | tojson }}
+{% elif subvalue is sequence and subvalue is not string %}
+{{ subvalue | join(', ') }}
+{% else %}
+{{ subvalue }}
+{% endif %}
+</td>
+</tr>
+{% endfor %}
+</table>
+
+{% elif value is sequence and value is not string %}
+{{ value | join(', ') }}
+
+{% else %}
+{{ value }}
+
+{% endif %}
+
+</td>
+</tr>
+
+{% endfor %}
+</table>
+
+{% else %}
+<div class="item">{{ section_data }}</div>
+{% endif %}
+</div>
+
+{% endfor %}
+
+<h3>Machine Learning Analysis</h3>
+
+<table>
+<tr><th>Property</th><th>Details</th></tr>
+
+<tr>
+<td>Prediction</td>
+<td>{{ checks.get('ml_prediction', 'Unavailable') }}</td>
+</tr>
+
+{% if checks.get('ml_probabilities') %}
+<tr>
+<td>Probabilities</td>
+<td>{{ checks.get('ml_probabilities') }}</td>
+</tr>
+{% endif %}
+</table>
+
+<h3>Technical URL Features</h3>
+
+{% set features = checks.get('features', {}) %}
+
+{% if features %}
+<table>
+<tr><th>Feature</th><th>Value</th></tr>
+{% for key, value in features.items() %}
+<tr>
+<td>{{ key.replace('_', ' ').title() }}</td>
+<td>{{ value }}</td>
+</tr>
+{% endfor %}
+</table>
+{% else %}
+<div class="item">No technical features available.</div>
+{% endif %}
+
+{% endif %}
+
+<h2>Disclaimer</h2>
+
+<p>
+This report is generated by URL Guard. Automated URL analysis
+cannot guarantee that a website is completely safe or malicious.
+Always verify suspicious websites independently.
+</p>
+
+<div class="buttons">
+<button onclick="window.print()">Download / Save as PDF</button>
+</div>
+
+</div>
+</body>
+</html>
