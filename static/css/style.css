@@ -879,3 +879,24 @@ button:disabled {
     color: #64748b;
     flex-wrap: wrap;
 }
+
+.copy-summary-btn {
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.copy-summary-btn:hover {
+    background: #1d4ed8;
+    transform: translateY(-2px);
+}
+
+.copy-summary-btn:focus {
+    outline: 2px solid #93c5fd;
+    outline-offset: 3px;
+}

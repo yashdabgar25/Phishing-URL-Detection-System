@@ -295,8 +295,52 @@ checkButton.addEventListener("click", async function () {
                     <p>Status: ${urlhaus.success ? "Available" : "Unavailable"}</p>
                 </div>
 
+                <div class="report-download">
+                    <button type="button" id="copyScanSummary" class="copy-summary-btn">
+                        📋 Copy Scan Summary
+                    </button>
+                </div>
+
             </div>
         `;
+        const copySummaryButton = document.getElementById("copyScanSummary");
+
+        if (copySummaryButton) {
+            copySummaryButton.addEventListener("click", async () => {
+
+                const detectedIndicators = Object.entries(indicators)
+                    .filter(([key, value]) => value === true)
+                    .map(([key]) => key.replace(/_/g, " "))
+                    .join(", ");
+
+                const summary = 
+                `URL GUARD - V7 SCAN REPORT
+
+                URL: ${v.url || url}
+                Risk Score: ${score}/100
+                Risk Level: ${level}
+                Triggered Indicators: ${risk.total_indicators ?? 0}
+
+                Detected Indicators:
+                ${detectedIndicators || "None detected"}
+
+                Google Safe Browsing: ${
+                    google.success
+                        ? (google.threat_found ? "Threat detected" : "No threat found")
+                        : "Unavailable"
+                }
+
+                Disclaimer: Automated analysis cannot guarantee website safety.`;
+
+                try {
+                    await navigator.clipboard.writeText(summary);
+                    copySummaryButton.textContent = "✅ Summary Copied!";
+                } catch (error) {
+                    copySummaryButton.textContent = "❌ Copy Failed";
+                    console.error(error);
+                }
+            });
+        }
 
     } catch (err) {
 
